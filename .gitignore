@@ -1,5 +1,7 @@
 *.class
 
+airplane.xml
+
 # Package Files #
 *.jar
 *.war
