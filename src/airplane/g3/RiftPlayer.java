@@ -1,4 +1,4 @@
-package airplane.g0;
+package airplane.g3;
 
 import java.util.ArrayList;
 import org.apache.log4j.Logger;
@@ -6,13 +6,13 @@ import airplane.sim.Plane;
 
 
 
-public class SerializedPlayer extends airplane.sim.Player {
+public class RiftPlayer extends airplane.sim.Player {
 
 	private Logger logger = Logger.getLogger(this.getClass()); // for logging
 	
 	@Override
 	public String getName() {
-		return "Serialized Player";
+		return "The Rift Player";
 	}
 	
 	/*
