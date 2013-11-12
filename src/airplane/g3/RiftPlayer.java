@@ -19,6 +19,7 @@ public class RiftPlayer extends airplane.sim.Player {
 	private boolean all_can_fly_straight = false;
 	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
 	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
+	private ArrayList<Plane> global_planes = new ArrayList<Plane>();
 	
 	@Override
 	public String getName() {
@@ -32,6 +33,7 @@ public class RiftPlayer extends airplane.sim.Player {
 	 */
 	@Override
 	public void startNewGame(ArrayList<Plane> planes) {
+		global_planes = planes;
 		all_can_fly_straight = false;
 		logger.info("Starting new game!");
 		// At the start, first see if all the planes can make their destinations in a straight line. If so, set the boolean flag so we don't mess with them in the update method :)
@@ -101,8 +103,25 @@ public class RiftPlayer extends airplane.sim.Player {
 		else{
 			for (int i = 0; i < planes.size(); i++) {
 				Plane p = planes.get(i);
-			    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1) {
+				Plane global = global_planes.get(i);
+			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1) {
 					bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+			    }
+			}
+			for (int i = 0; i < planes.size(); i++) {
+				Plane other = planes.get(i);
+				Plane global = global_planes.get(i);
+				if(!departures.containsKey(global) && round >= other.getDepartureTime() && other.getBearing() == -1){
+			    	boolean flying = false;
+			    	for (int j = 0; j < planes.size(); j++) {
+			    		if(bearings[j] >= 0){
+			    			flying = true;
+			    			break;
+			    		}
+			    	}
+			    	if(!flying){
+			    		bearings[i] = calculateBearing(other.getLocation(), other.getDestination());
+			    	}
 			    }
 			}
 		}
