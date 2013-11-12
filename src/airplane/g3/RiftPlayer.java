@@ -1,6 +1,10 @@
 package airplane.g3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.PriorityQueue;
 
 import org.apache.log4j.Logger;
 
@@ -13,6 +17,8 @@ public class RiftPlayer extends airplane.sim.Player {
 
 	private Logger logger = Logger.getLogger(this.getClass()); // for logging
 	private boolean all_can_fly_straight = false;
+	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
+	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
 	
 	@Override
 	public String getName() {
@@ -32,6 +38,22 @@ public class RiftPlayer extends airplane.sim.Player {
 		SimulationResult res = startSimulation(planes, 0);
 		if (res.getReason() == 0){
 			all_can_fly_straight = true;
+		}
+		if (!all_can_fly_straight){
+			Comparator<Plane> comparator = new PlaneDepartureComparator();
+			unfinished_departures = new PriorityQueue<Plane>(planes.size(), comparator);
+			unfinished_departures.addAll(planes);
+			while (unfinished_departures.size() > 0){
+				Plane p = unfinished_departures.remove();
+				int time = p.getDepartureTime();
+				departures.put(p, time);
+				res = startSimulation(planes, 0);
+				while(res.getReason() != 0){
+					time++;
+					departures.put(p, time);
+					res = startSimulation(planes, 0);
+				}
+			}
 		}
 	}
 	
@@ -53,29 +75,13 @@ public class RiftPlayer extends airplane.sim.Player {
 			}
 			return bearings;
 		}
-		// if any plane is in the air, then just keep things as-is
-		for (Plane p : planes) {
-		    if (p.getBearing() != -1 && p.getBearing() != -2) return bearings;
-		}
-
-		// if no plane is in the air, find the one with the earliest 
-		// departure time and move that one in the right direction
-		int minTime = 10000;
-		int minIndex = 10000;
+		// if they can't all fly straight, check the priority queue and progressively delay until they can.
 		for (int i = 0; i < planes.size(); i++) {
 			Plane p = planes.get(i);
-		    if (p.getDepartureTime() < minTime && p.getBearing() == -1) {
-				minIndex = i;
-				minTime = p.getDepartureTime();
+		    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1) {
+				bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 		    }
 		}
-		
-		// if it's not too early, then take off and head straight for the destination
-		if (round >= minTime) {
-		    Plane p = planes.get(minIndex);
-		    bearings[minIndex] = calculateBearing(p.getLocation(), p.getDestination());
-		}
-		
 		
 		return bearings;
 	}
@@ -84,15 +90,47 @@ public class RiftPlayer extends airplane.sim.Player {
 	protected double[] simulateUpdate(ArrayList<Plane> planes, int round, double[] bearings) {
 		// if no plane is in the air, find the one with the earliest 
 		// departure time and move that one in the right direction
-		for (int i = 0; i < planes.size(); i++) {
-			Plane p = planes.get(i);
-		    if (round >= p.getDepartureTime() && p.getBearing() == -1) {
-				bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
-		    }
+		if(departures.size() == 0){
+			for (int i = 0; i < planes.size(); i++) {
+				Plane p = planes.get(i);
+			    if (round >= p.getDepartureTime() && p.getBearing() == -1) {
+					bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+			    }
+			}
 		}
-		
+		else{
+			for (int i = 0; i < planes.size(); i++) {
+				Plane p = planes.get(i);
+			    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1) {
+					bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+			    }
+			}
+		}
 		return bearings;
 	}
 	
+	
+	
+	public class PlaneDepartureComparator implements Comparator<Plane>
+	{
+	    @Override
+	    public int compare(Plane x, Plane y)
+	    {
+	    	if (x.equals(null) || y.equals(null)){
+	    		return 0;
+	    	}
+	        if (x.getDepartureTime() < y.getDepartureTime())
+	        {
+	            return -1;
+	        }
+	        if (x.getDepartureTime() > y.getDepartureTime())
+	        {
+	            return 1;
+	        }
+	        return 0;
+	    }
+	}
 
 }
+
+
