@@ -61,16 +61,22 @@ public class RiftPlayer extends airplane.sim.Player {
 				Plane p = unfinished_departures.remove();
 				int time = p.getDepartureTime();
 				departures.put(p, time);
-				if(!headOnCollision(planes,p)){
+				boolean headOnCollision = headOnCollision(planes, p);
+				if(!headOnCollision){
 					res = startSimulation(planes, 0);
 					while(res.getReason() != 0){
+						// if we time out, look for angles
+						if(time >= max_delay) {
+							headOnCollision = true;
+							break;
+						}
 						time++;
 						departures.put(p, time);
 						res = startSimulation(planes, 0);
 					}
 				}
 				//if there is going to be a head on collision, try to create a curved path.
-				else{
+				if(headOnCollision) {
 					double bearing = calculateBearing(p.getLocation(),p.getDestination());
 					double max_bearing = (bearing+max_theta)%360;
 					double min_bearing = (bearing-max_theta)%360;
