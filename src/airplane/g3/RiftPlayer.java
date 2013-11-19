@@ -68,6 +68,7 @@ public class RiftPlayer extends airplane.sim.Player {
 						res = startSimulation(planes, 0);
 					}
 				}
+				//if there is going to be a head on collision, try to create a curved path.
 				else{
 					double bearing = calculateBearing(p.getLocation(),p.getDestination());
 					double max_bearing = (bearing+max_theta)%360;
@@ -84,18 +85,21 @@ public class RiftPlayer extends airplane.sim.Player {
 							posbearing = posbearing%360;
 							omega = getOmega(p,posbearing);
 							pos = !pos;
+							originals.put(p, posbearing);
 						}
 						else{
 							negbearing -= increment_theta;
 							negbearing = negbearing%360;
 							omega = getOmega(p,negbearing);
 							pos = !pos;
+							originals.put(p, negbearing);
 						}
 						omegas.put(p, omega);
 						res = startSimulation(planes, 0);
 					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
 					//if it dropped out b/c couldn't find an angle, make it delay like normal.
 					if(posbearing >= max_bearing || negbearing <= min_bearing){
+						originals.put(p, bearing);
 						omegas.remove(p);
 						res = startSimulation(planes, 0);
 						while(res.getReason() != 0){
@@ -112,7 +116,7 @@ public class RiftPlayer extends airplane.sim.Player {
 	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
 		boolean collision = false;
 		for (Plane test : planes){
-			if (test.getDestination().equals(p.getLocation()) && test.getLocation().equals(p.getDestination())){
+			if (test.getDestination().equals(p.getLocation()) && test.getLocation().equals(p.getDestination()) && !omegas.containsKey(test)){
 				collision = true;
 				break;
 			}
