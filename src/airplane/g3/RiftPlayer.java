@@ -26,8 +26,8 @@ public class RiftPlayer extends airplane.sim.Player {
 	
 	private int max_delay = 10;
 	
-	private double max_theta = 90;
-	private double increment_theta = 5;
+	private double max_theta = 170;
+	private double increment_theta = 2;
 	
 	
 	@Override
