@@ -28,6 +28,7 @@ public class RiftPlayer extends airplane.sim.Player {
 	private double max_theta = 90;
 	private double increment_theta = 5;
 	
+	
 	@Override
 	public String getName() {
 		return "The Rift Player";
@@ -83,7 +84,6 @@ public class RiftPlayer extends airplane.sim.Player {
 							posbearing = posbearing%360;
 							omega = getOmega(p,posbearing);
 							pos = !pos;
-							
 						}
 						else{
 							negbearing -= increment_theta;
@@ -94,6 +94,16 @@ public class RiftPlayer extends airplane.sim.Player {
 						omegas.put(p, omega);
 						res = startSimulation(planes, 0);
 					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
+					//if it dropped out b/c couldn't find an angle, make it delay like normal.
+					if(posbearing >= max_bearing || negbearing <= min_bearing){
+						omegas.remove(p);
+						res = startSimulation(planes, 0);
+						while(res.getReason() != 0){
+							time++;
+							departures.put(p, time);
+							res = startSimulation(planes, 0);
+						}
+					}
 				}
 			}
 		}
@@ -111,54 +121,11 @@ public class RiftPlayer extends airplane.sim.Player {
 		return collision;
 	}
 	
-	private double getLongestFlightTime(ArrayList<Plane> planes){
-		double longest = 0;
-		for (Plane p : planes){
-			
-		}
-		
-		return longest;
-	}
-	
-	private double getPathTime(Plane p, double bearing){
-		double straight = calculateBearing(p.getLocation(),p.getDestination());
-		if (bearing == straight){
-			return Math.sqrt(Math.pow(p.getX() - p.getDestination().x,2) + Math.pow(p.getY() - p.getDestination().y,2))/p.VELOCITY;
-		}
-		double length = getArcLength(p,bearing);
-		
-		return length/p.VELOCITY;
-	}
-	
-	private double getArcLength(Plane p, double bearing){
-		double radius;
-		double origin = calculateBearing(p.getLocation(),p.getDestination());
-		double angle;
-		if(Math.abs(origin - bearing) > 180)
-			angle = origin - bearing;
-		else
-			angle = origin - 360 + bearing;
-		
-//		double theta = 180 - 2*Math.abs(angle);
-//		theta = theta*Math.PI/180;
-		
-		double theta = 2*angle;
-		
-		double chord = Math.sqrt(Math.pow(p.getX() - p.getDestination().x,2) + Math.pow(p.getY() - p.getDestination().y,2));
-		
-//		radius = chord/Math.atan(theta);
-		radius = chord/(2*Math.sin(theta));
-		
-		double length = radius*theta;
-		
-		return length;
-	}
-	
 	private double getOmega(Plane p, double bearing){
 		double radius;
 		double origin = calculateBearing(p.getLocation(),p.getDestination());
 		double angle;
-		if(Math.abs(origin - bearing) > 180)
+		if(Math.abs(origin - bearing) < 180)
 			angle = origin - bearing;
 		else
 			angle = origin - 360 + bearing;
@@ -206,8 +173,11 @@ public class RiftPlayer extends airplane.sim.Player {
 		    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 		    	else{
 		    		bearings[i] = (originals.get(p) + round*omegas.get(p))%360;
-		    		logger.debug(bearings[i]);
 		    	}
+		    }
+		    else if (departures.containsKey(p) && round >= departures.get(p) && omegas.containsKey(p)){
+		    	double bearing = (originals.get(p) + round*omegas.get(p))%360;
+	    		bearings[i] = bearing;
 		    }
 		}
 		
@@ -236,8 +206,11 @@ public class RiftPlayer extends airplane.sim.Player {
 			    	else{
 			    		double bearing = (originals.get(global) + round*omegas.get(global))%360;
 			    		bearings[i] = bearing;
-			    		logger.debug(bearing);
 			    	}
+			    }
+			    else if (departures.containsKey(global) && round >= departures.get(global) && omegas.containsKey(global)){
+			    	double bearing = (originals.get(global) + round*omegas.get(global))%360;
+		    		bearings[i] = bearing;
 			    }
 			}
 			for (int i = 0; i < planes.size(); i++) {
