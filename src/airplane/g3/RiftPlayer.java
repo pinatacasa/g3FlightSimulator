@@ -66,7 +66,7 @@ public class RiftPlayer extends airplane.sim.Player {
 					res = startSimulation(planes, 0);
 					while(res.getReason() != 0){
 						// if we time out, look for angles
-						if(time >= max_delay) {
+						if(time - p.getDepartureTime() >= max_delay) {
 							headOnCollision = true;
 							break;
 						}
