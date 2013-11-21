@@ -58,6 +58,7 @@ public class RiftPlayer extends airplane.sim.Player {
 			unfinished_departures = new PriorityQueue<Plane>(planes.size(), comparator);
 			unfinished_departures.addAll(planes);
 			while (unfinished_departures.size() > 0){
+				System.err.println("1");
 				Plane p = unfinished_departures.remove();
 				int time = p.getDepartureTime();
 				departures.put(p, time);
@@ -65,6 +66,7 @@ public class RiftPlayer extends airplane.sim.Player {
 				if(!headOnCollision){
 					res = startSimulation(planes, 0);
 					while(res.getReason() != 0){
+						System.err.println("2");
 						// if we time out, look for angles
 						if(time - p.getDepartureTime() >= max_delay) {
 							headOnCollision = true;
@@ -86,7 +88,9 @@ public class RiftPlayer extends airplane.sim.Player {
 					// start positive
 					boolean pos = true;
 					double omega;
+					System.err.println("MADE ITO IN!");
 					do{
+						System.err.println("Current pos bearing is: " + posbearing + "a and neg bearing is: " + negbearing);
 						if(pos){
 							posbearing += increment_theta;
 							posbearing = posbearing%360;
@@ -102,15 +106,23 @@ public class RiftPlayer extends airplane.sim.Player {
 							originals.put(p, negbearing);
 						}
 						omegas.put(p, omega);
+						System.err.println("INNN");
 						res = startSimulation(planes, 0);
+						System.err.println("OUUUTTTT");
 					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
+					System.err.println("MADE ITO OUT!");
 					//if it dropped out b/c couldn't find an angle, make it delay like normal.
 					if(posbearing >= max_bearing || negbearing <= min_bearing){
-						originals.put(p, bearing);
+						System.err.println("Bearing is: " + bearing);
+						System.err.println("Initial bearing is: " + calculateBearing(p.getLocation(),p.getDestination()));
+						originals.put(p, calculateBearing(p.getLocation(),p.getDestination()));
+						collisions.remove(p);
 						omegas.remove(p);
+						time = p.getDepartureTime();
 						res = startSimulation(planes, 0);
 						while(res.getReason() != 0){
 							time++;
+							System.err.println("Reason is: " + res.getReason());
 							departures.put(p, time);
 							res = startSimulation(planes, 0);
 						}
