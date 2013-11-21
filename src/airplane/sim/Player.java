@@ -97,9 +97,9 @@ public abstract class Player {
     		// update the round number
     		round++;
     		
-    		if(round > 1500) {
-    			return new SimulationResult(SimulationResult.TOO_CLOSE, round, simPlanes);
-    		}
+//    		if(round > 1500) {
+//    			return new SimulationResult(SimulationResult.TOO_CLOSE, round, simPlanes);
+//    		}
     		// the player simulates the update of the planes
     		simBearings = simulateUpdate(simPlanes, round, simBearings);
     		// if it's null, then don't bother
