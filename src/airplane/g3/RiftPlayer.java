@@ -80,52 +80,70 @@ public class RiftPlayer extends airplane.sim.Player {
 				//if there is going to be a head on collision, try to create a curved path.
 				if(headOnCollision) {
 					double bearing = calculateBearing(p.getLocation(),p.getDestination());
-					double max_bearing = (bearing+max_theta)%360;
-					double min_bearing = (bearing-max_theta)%360;
-					//start checks
-					double posbearing = bearing;
-					double negbearing = bearing;
-					// start positive
-					boolean pos = true;
-					double omega;
-					do{
-						System.err.println("3");
-						if(pos){
-							posbearing += increment_theta;
-							posbearing = posbearing%360;
-							omega = getOmega(p,posbearing);
-							pos = !pos;
-							originals.put(p, posbearing);
-						}
-						else{
-							negbearing -= increment_theta;
-							negbearing = negbearing%360;
-							omega = getOmega(p,negbearing);
-							pos = !pos;
-							originals.put(p, negbearing);
-						}
-						omegas.put(p, omega);
-						res = startSimulation(planes, 0);
-					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
-					//if it dropped out b/c couldn't find an angle, make it delay like normal.
-					if(posbearing >= max_bearing || negbearing <= min_bearing){
-						System.err.println("Bearing is: " + bearing);
-						System.err.println("Initial bearing is: " + calculateBearing(p.getLocation(),p.getDestination()));
+					boolean couldFindArc = calculateOmega(planes,p);
+					while(!couldFindArc){
 						originals.put(p, bearing);
-						collisions.remove(p);
-						omegas.remove(p);
-						time = p.getDepartureTime();
-						res = startSimulation(planes, 0);
-						while(res.getReason() != 0){
-							time++;
-//							System.err.println("Reason is: " + res.getReason());
-							departures.put(p, time);
-							res = startSimulation(planes, 0);
-						}
+						time++;
+						departures.put(p,time);
+						couldFindArc = calculateOmega(planes,p);
 					}
+					
+					//if it dropped out b/c couldn't find an angle, make it delay like normal.
+//					if(posbearing >= max_bearing || negbearing <= min_bearing){
+//						System.err.println("Bearing is: " + bearing);
+//						System.err.println("Initial bearing is: " + calculateBearing(p.getLocation(),p.getDestination()));
+//						originals.put(p, bearing);
+//						collisions.remove(p);
+//						omegas.remove(p);
+//						time = p.getDepartureTime();
+//						res = startSimulation(planes, 0);
+//						while(res.getReason() != 0){
+//							time++;
+////							System.err.println("Reason is: " + res.getReason());
+//							departures.put(p, time);
+//							res = startSimulation(planes, 0);
+//						}
+//					}
 				}
 			}
 		}
+	}
+	
+	private boolean calculateOmega(ArrayList<Plane> planes, Plane p){
+		double bearing = calculateBearing(p.getLocation(),p.getDestination());
+		double max_bearing = (bearing+max_theta)%360;
+		double min_bearing = (bearing-max_theta)%360;
+		//start checks
+		double posbearing = bearing;
+		double negbearing = bearing;
+		// start positive
+		boolean pos = true;
+		double omega;
+		SimulationResult res;
+		do{
+			System.err.println("3");
+			if(pos){
+				posbearing += increment_theta;
+				posbearing = posbearing%360;
+				omega = getOmega(p,posbearing);
+				pos = !pos;
+				originals.put(p, posbearing);
+			}
+			else{
+				negbearing -= increment_theta;
+				negbearing = negbearing%360;
+				omega = getOmega(p,negbearing);
+				pos = !pos;
+				originals.put(p, negbearing);
+			}
+			omegas.put(p, omega);
+			res = startSimulation(planes, 0);
+		}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
+		if(!(posbearing < max_bearing && negbearing > min_bearing)){
+			return false;
+		}
+		else
+			return true;
 	}
 	
 	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
