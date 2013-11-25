@@ -144,11 +144,11 @@ public class Plane extends GameObject {
 		
 		// make sure they're still in bounds
 		if (newx < 0 || newx > 100) {
-			System.err.println("Error! new x-coordinate position " + newx + " is out of bounds!");
+//			System.err.println("Error! new x-coordinate position " + newx + " is out of bounds!");
 			return OUT_OF_BOUNDS;
 		}
 		if (newy < 0 || newy > 100) {
-			System.err.println("Error! new y-coordinate position " + newy + " is out of bounds!");
+//			System.err.println("Error! new y-coordinate position " + newy + " is out of bounds!");
 			return OUT_OF_BOUNDS;
 		}
 				

@@ -20,14 +20,14 @@ public class RiftPlayer extends airplane.sim.Player {
 	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
 	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
 	private ArrayList<Plane> global_planes = new ArrayList<Plane>();
-	private Map<Plane,Double> omegas = new HashMap<Plane,Double>();
-	private Map<Plane,Double> originals = new HashMap<Plane,Double>();
-	private Map<Plane,Plane> collisions = new HashMap<Plane,Plane>();
+	private Map<Plane,Double> omegas = new HashMap<Plane,Double>(); // contains keys if contains arc
+	private Map<Plane,Double> originals = new HashMap<Plane,Double>(); // initial bearing from start location.
+	private Map<Plane,Plane> collisions = new HashMap<Plane,Plane>(); // literally overlapping lines
 	
 	private int max_delay = 10;
 	
-	private double max_theta = 170;
-	private double increment_theta = 2;
+	private double max_theta = 30;
+	private double increment_theta = 5;
 	
 	
 	@Override
@@ -62,7 +62,7 @@ public class RiftPlayer extends airplane.sim.Player {
 				Plane p = unfinished_departures.remove();
 				int time = p.getDepartureTime();
 				departures.put(p, time);
-				boolean headOnCollision = headOnCollision(planes, p);
+				boolean headOnCollision = headOnCollision(unfinished_departures, p);
 				if(!headOnCollision){
 					res = startSimulation(planes, 0);
 					while(res.getReason() != 0){
@@ -82,6 +82,8 @@ public class RiftPlayer extends airplane.sim.Player {
 					double bearing = calculateBearing(p.getLocation(),p.getDestination());
 					double max_bearing = (bearing+max_theta)%360;
 					double min_bearing = (bearing-max_theta)%360;
+					if(min_bearing < 0)
+						System.err.println("min_bearing is: " + min_bearing);
 					//start checks
 					double posbearing = bearing;
 					double negbearing = bearing;
@@ -98,14 +100,16 @@ public class RiftPlayer extends airplane.sim.Player {
 							originals.put(p, posbearing);
 						}
 						else{
+							System.err.println("negbearing is: " + negbearing);
 							negbearing -= increment_theta;
-							negbearing = negbearing%360;
-							omega = getOmega(p,negbearing);
+							negbearing = (negbearing)%360;
+							omega = getOmega(p,(negbearing+360)%360);
 							pos = !pos;
-							originals.put(p, negbearing);
+							originals.put(p, (negbearing+360)%360);
 						}
 						omegas.put(p, omega);
 						res = startSimulation(planes, 0);
+						System.err.println("resulted in result of: " + res.getReason());
 					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
 					//if it dropped out b/c couldn't find an angle, make it delay like normal.
 					if(posbearing >= max_bearing || negbearing <= min_bearing){
@@ -118,7 +122,7 @@ public class RiftPlayer extends airplane.sim.Player {
 						res = startSimulation(planes, 0);
 						while(res.getReason() != 0){
 							time++;
-//							System.err.println("Reason is: " + res.getReason());
+							System.err.println("Reason is: " + res.getReason());
 							departures.put(p, time);
 							res = startSimulation(planes, 0);
 						}
@@ -128,7 +132,7 @@ public class RiftPlayer extends airplane.sim.Player {
 		}
 	}
 	
-	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
+	private boolean headOnCollision(PriorityQueue<Plane> planes, Plane p){
 		boolean collision = false;
 		for (Plane test : planes){
 			if (test.getDestination().equals(p.getLocation()) && test.getLocation().equals(p.getDestination()) && !omegas.containsKey(test)){
@@ -193,11 +197,12 @@ public class RiftPlayer extends airplane.sim.Player {
 		    	if(!omegas.containsKey(p))
 		    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 		    	else{
-		    		bearings[i] = (originals.get(p) + round*omegas.get(p))%360;
+		    		bearings[i] = (originals.get(p)+360)%360;
 		    	}
 		    }
 		    else if (departures.containsKey(p) && round >= departures.get(p) && omegas.containsKey(p)){
-		    	double bearing = (originals.get(p) + round*omegas.get(p))%360;
+		    	double bearing = (originals.get(p) + ((round-departures.get(p))*omegas.get(p))+360)%360;
+//		    	double bearing = (originals.get(p) + round*omegas.get(p))%360;
 	    		bearings[i] = bearing;
 		    }
 		}
@@ -219,22 +224,23 @@ public class RiftPlayer extends airplane.sim.Player {
 			    }
 			}
 		}
+		// all the logic
 		else{
 			for (int i = 0; i < planes.size(); i++) {
 				if(bearings[i] == -2)
 		    		continue;
 				Plane p = planes.get(i);
 				Plane global = global_planes.get(i);
-			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1) {
+			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1) { // check to see if we can legally fly
 			    	if(!omegas.containsKey(global))
 			    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 			    	else{
-			    		double bearing = (originals.get(global) + round*omegas.get(global))%360;
+			    		double bearing = originals.get(global);
 			    		bearings[i] = bearing;
 			    	}
 			    }
-			    else if (departures.containsKey(global) && round >= departures.get(global) && omegas.containsKey(global)){
-			    	double bearing = (originals.get(global) + round*omegas.get(global))%360;
+			    else if (departures.containsKey(global) && round >= departures.get(global) && omegas.containsKey(global)){ // when planes are in flight
+			    	double bearing = ((originals.get(global) + (round-departures.get(global))*omegas.get(global))+360)%360;
 		    		bearings[i] = bearing;
 			    }
 			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global)){
