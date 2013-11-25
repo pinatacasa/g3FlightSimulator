@@ -62,7 +62,7 @@ public class RiftPlayer extends airplane.sim.Player {
 				Plane p = unfinished_departures.remove();
 				int time = p.getDepartureTime();
 				departures.put(p, time);
-				boolean headOnCollision = headOnCollision(unfinished_departures, p);
+				boolean headOnCollision = headOnCollision(planes, p);
 				if(!headOnCollision){
 					res = startSimulation(planes, 0);
 					while(res.getReason() != 0){
@@ -132,7 +132,7 @@ public class RiftPlayer extends airplane.sim.Player {
 		}
 	}
 	
-	private boolean headOnCollision(PriorityQueue<Plane> planes, Plane p){
+	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
 		boolean collision = false;
 		for (Plane test : planes){
 			if (test.getDestination().equals(p.getLocation()) && test.getLocation().equals(p.getDestination()) && !omegas.containsKey(test)){
