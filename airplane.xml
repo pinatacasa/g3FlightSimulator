@@ -4,7 +4,6 @@
 <properties>
 	<comment>A sample configuration file.</comment>
 	
-<entry key="airplane.classes">airplane.g3.SerializedPlayer</entry>
 <entry key="airplane.classes">airplane.g3.RiftPlayer</entry>
 
 	
