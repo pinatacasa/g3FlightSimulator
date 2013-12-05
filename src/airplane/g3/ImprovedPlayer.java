@@ -3,11 +3,13 @@ package airplane.g3;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.PriorityQueue;
 
 import org.apache.log4j.Logger;
 
+import airplane.g3.RiftPlayer.PlaneDepartureComparator;
 import airplane.sim.Plane;
 import airplane.sim.SimulationResult;
 
@@ -20,17 +22,15 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
 	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
 	private ArrayList<Plane> global_planes = new ArrayList<Plane>();
-	private Map<Plane,Double> omegas = new HashMap<Plane,Double>(); // contains keys if contains arc
 	private Map<Plane,Double> originals = new HashMap<Plane,Double>(); // initial bearing from start location.
 	private Map<Plane,Plane> collisions = new HashMap<Plane,Plane>(); // literally overlapping lines
-	private Map<Plane, Double> stepTable = new HashMap<Plane, Double>();
-	private Map<Plane, Double> finalStepTable = new HashMap<Plane, Double>();
-	
-	private int max_delay = 10;
-	
-	private double max_theta = 30;
+	private Hashtable<Plane, Double> omegaTable = new Hashtable<Plane, Double>();
+	private Hashtable<Plane, Integer> isCurve = new Hashtable<Plane, Integer>();
+	private Hashtable<Plane, Integer> statusTable = new Hashtable<Plane, Integer>();
+
 	private double increment_theta = 5;
-	
+	private int max_delay = 10;
+	private double max_theta = 30;
 	
 	@Override
 	public String getName() {
@@ -45,6 +45,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	 */
 	@Override
 	public void startNewGame(ArrayList<Plane> planes) {
+		
 		global_planes = planes;
 		all_can_fly_straight = false;
 		logger.info("Starting new game!");
@@ -57,23 +58,16 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			all_can_fly_straight = true;
 		}
 		if (!all_can_fly_straight){
+			
 			Comparator<Plane> comparator = new PlaneDepartureComparator();
 			unfinished_departures = new PriorityQueue<Plane>(planes.size(), comparator);
 			unfinished_departures.addAll(planes);
 			while (unfinished_departures.size() > 0){
-//				System.err.println("1");
+
 				Plane p = unfinished_departures.remove();
 				int time = p.getDepartureTime();
 				departures.put(p, time);
-//				boolean headOnCollision = headOnCollision(planes, p);
 				int mode = 1;
-//				if (headOnCollision) {
-//					
-//					mode = 1;
-//				} else  {
-//					
-//					mode = 0;
-//				}
 				
 				boolean isFirst = true;
 				
@@ -81,34 +75,26 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				int omegaTime = 0;
 				
 				int maxDelayTime = 5;
-				int maxOmegaTime = 15;
+				int maxOmegaTime = 16;
 				
 				double bearing = calculateBearing(p.getLocation(),p.getDestination());
-				double max_bearing = (bearing+max_theta)%360;
-				double min_bearing = (bearing-max_theta)%360;
-				if(min_bearing < 0)
-					System.err.println("min_bearing is: " + min_bearing);
+
 				//start checks
 				double posbearing = bearing;
 				double negbearing = bearing;
 				// start positive
 				boolean pos = true;
-				double omega;
-				
-				int imegaDelay = 0;
-				int exchange = 0;
+	
 				do {
 					
-//					if(posbearing >= max_bearing || negbearing <= min_bearing){
-////						System.err.println("Bearing is: " + bearing);
-////						System.err.println("Initial bearing is: " + calculateBearing(p.getLocation(),p.getDestination()));
-//						originals.put(p, bearing);
-//						collisions.remove(p);
-//						omegas.remove(p);
-//						time = p.getDepartureTime();
-//						res = startSimulation(planes, 0);
+//					if (time >= 15) {
 //						
-//						mode = 0;
+//						mode = 1;
+//						omegaTime = 0;
+//						posbearing = bearing;
+//						negbearing = bearing;
+//						maxOmegaTime = 34;
+//						departures.put(p, p.getDepartureTime());
 //					}
 					
 					if (delayTime > maxDelayTime && mode == 0) {
@@ -117,22 +103,31 @@ public class ImprovedPlayer extends airplane.sim.Player {
 						omegaTime = 0;
 						posbearing = bearing;
 						negbearing = bearing;
+						
+//						int newTime = time - 2;
+//						departures.put(p, newTime);
 					}
 					
 					if (omegaTime > maxOmegaTime && mode == 1) {
 						
 						mode = 0;
 						delayTime = 0;
-						imegaDelay = 0;
-//						exchange = 0;
-//						time = p.getDepartureTime();
+						if (omegaTable.containsKey(p)) {
+							
+							omegaTable.remove(p);
+						}
+						
+						if (isCurve.containsKey(p)) {
+							
+							isCurve.remove(p);
+						}
+//						departures.put(p, time);
 					}
 					
 					if (mode == 0) {
 						
 						delayTime ++;
-						
-						System.err.println("0 " + delayTime + " " + departures.get(p));
+
 						if (!isFirst) {
 							
 							time ++;
@@ -148,135 +143,119 @@ public class ImprovedPlayer extends airplane.sim.Player {
 						
 //						System.err.println("1 " + omegaTime);
 						if(pos){
-							posbearing += increment_theta;
-							posbearing = posbearing%360;
-							omega = getOmega(p,posbearing);
+							
+							posbearing = plusDelta(posbearing, increment_theta); 
 							pos = !pos;
 							originals.put(p, posbearing);
+							isCurve.put(p, 1);
+							statusTable.put(p, 1);
 						}
 						else{
-//							System.err.println("negbearing is: " + negbearing);
-							negbearing -= increment_theta;
-							negbearing = (negbearing)%360;
-							omega = getOmega(p,(negbearing+360)%360);
+							
+							negbearing = minusDelta(negbearing, increment_theta);
 							pos = !pos;
-							originals.put(p, (negbearing+360)%360);
+							originals.put(p, negbearing);
+							isCurve.put(p, 1);
+							statusTable.put(p, -1);
 						}
-						omegas.put(p, omega);
+
 						res = startSimulation(planes, 0);
 					}
 					
-//					System.err.println(res.getReason());
+					System.err.println(res.getReason() + " " + mode);
 				} while(res.getReason() != 0);
 				
-//				if(!headOnCollision){
-//					res = startSimulation(planes, 0);
-//					while(res.getReason() != 0){
-////						System.err.println("2");
-//						// if we time out, look for angles
-//						if(time - p.getDepartureTime() >= max_delay) {
-//							headOnCollision = true;
-//							break;
-//						}
-//						time++;
-//						departures.put(p, time);
-//						res = startSimulation(planes, 0);
-//					}
-//				}
-				//if there is going to be a head on collision, try to create a curved path.
-//				if(headOnCollision) {
-//					double bearing = calculateBearing(p.getLocation(),p.getDestination());
-//					double max_bearing = (bearing+max_theta)%360;
-//					double min_bearing = (bearing-max_theta)%360;
-//					if(min_bearing < 0)
-//						System.err.println("min_bearing is: " + min_bearing);
-//					//start checks
-//					double posbearing = bearing;
-//					double negbearing = bearing;
-//					// start positive
-//					boolean pos = true;
-//					double omega;
-//					do{
-////						System.err.println("3");
-//						if(pos){
-//							posbearing += increment_theta;
-//							posbearing = posbearing%360;
-//							omega = getOmega(p,posbearing);
-//							pos = !pos;
-//							originals.put(p, posbearing);
-//						}
-//						else{
-////							System.err.println("negbearing is: " + negbearing);
-//							negbearing -= increment_theta;
-//							negbearing = (negbearing)%360;
-//							omega = getOmega(p,(negbearing+360)%360);
-//							pos = !pos;
-//							originals.put(p, (negbearing+360)%360);
-//						}
-//						omegas.put(p, omega);
-//						res = startSimulation(planes, 0);
-////						System.err.println("resulted in result of: " + res.getReason());
-//					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
-//					//if it dropped out b/c couldn't find an angle, make it delay like normal.
-//					if(posbearing >= max_bearing || negbearing <= min_bearing){
-////						System.err.println("Bearing is: " + bearing);
-////						System.err.println("Initial bearing is: " + calculateBearing(p.getLocation(),p.getDestination()));
-//						originals.put(p, bearing);
-//						collisions.remove(p);
-//						omegas.remove(p);
-//						time = p.getDepartureTime();
-//						res = startSimulation(planes, 0);
-//						while(res.getReason() != 0){
-//							time++;
-////							System.err.println("Reason is: " + res.getReason());
-//							departures.put(p, time);
-//							res = startSimulation(planes, 0);
-//						}
-//					}
-//				}
 			}
 		}
 	}
 	
-	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
-		boolean collision = false;
-		for (Plane test : planes){
-			if (test.getDestination().equals(p.getLocation()) && test.getLocation().equals(p.getDestination()) && !omegas.containsKey(test)){
-				collision = true;
-				collisions.put(p, test);
-				break;
-			}
+	private double formatAngle(double angle) {
+		
+		double result = angle;
+		
+		while (result < 0) {
+			
+			result = result + (double)360;
 		}
-		return collision;
+		
+		while (result >= 360) {
+			
+			result = result - (double)360;
+		}
+		
+		return result;
 	}
 	
+	private double differenceOfAngles(double angle1, double angle2) {
+		
+		double result;
+		
+		double a1 = formatAngle(angle1);
+		double a2 = formatAngle(angle2);
+		
+		double difference = Math.abs(a1 - a2);
+		if (difference <= 180) {
+			
+			result = difference;
+		} else {
+			
+			result = (double)360 - difference;
+		}
+		
+		return result;
+	}
+	
+	private double plusDelta(double ori, double delta) {
+		
+		double result;
+		
+		result = ori + delta;
+		
+		result = formatAngle(result);
+		
+		return result;
+	}
+	
+	private double minusDelta(double ori, double delta) {
+		
+		double result;
+		
+		result = ori - delta;
+		
+		result = formatAngle(result);
+		
+		return result;
+	}
+
 	private double getOmega(Plane p, double bearing){
 		double radius;
-		double origin = calculateBearing(p.getLocation(),p.getDestination());
-		double angle;
-		if(Math.abs(origin - bearing) < 180)
-			angle = origin - bearing;
-		else
-			angle = origin - 360 + bearing;
 		
-		double theta = angle;
+		double theta = bearing;
 		
 		theta = theta*Math.PI/180;
 		
-		double chord = Math.sqrt(Math.pow(p.getX() - p.getDestination().x,2) + Math.pow(p.getY() - p.getDestination().y,2));
+		
+		double chord = p.getLocation().distance(p.getDestination());
 		
 		radius = chord/(2*Math.sin(theta));
 		
-		double length = radius*theta;
+		double length = radius * Math.PI * bearing / 90;
 		
 		double time = length/p.VELOCITY;
 		
-		double t = 2 * time;
-		stepTable.put(p, t);
-		finalStepTable.put(p, t);
+		double omega = 2 * bearing/time;
 		
-		double omega = theta/time;
 		
+		
+		if (omegaTable.contains(p)) {
+			
+			omegaTable.remove(p);
+			omegaTable.put(p, omega);
+		} else {
+			
+			omegaTable.put(p, omega);
+		}
+
 		return omega*180/Math.PI;
 	}
 	
@@ -303,38 +282,60 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			if(bearings[i] == -2)
 	    		continue;
 			Plane p = planes.get(i);
+			
 		    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1) {
-		    	if(!omegas.containsKey(p))
-		    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
-		    	else{
-		    		bearings[i] = (originals.get(p)+360)%360;
-		    		int t = (departures.get(p) - p.getDepartureTime());
-//		    		logger.info("Omega Delay is " + new Integer(t).toString());
+		    	
+		    	if(!isCurve.containsKey(p)) {
 		    		
-//		    		double left = stepTable.get(p);
-//		    		left = left - (double)1;
-//		    		finalStepTable.put(p, left);
+		    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+		    	} else {
+		    		
+		    		double directBearing = calculateBearing(p.getLocation(), p.getDestination());
+		 		    double iniBearing = originals.get(p);
+		    		double angle = differenceOfAngles(directBearing, iniBearing);
+		    		logger.info("Diff: " + angle);
+		    		if (angle > 90) {
+			    		
+			    		bearings[i] = minusDelta(iniBearing, statusTable.get(p) * 10);
+			    	} else {
+			    		
+			    		getOmega(p, angle);
+			    		bearings[i] = minusDelta(iniBearing, statusTable.get(p) * omegaTable.get(p));
+			    	}
 		    	}
 		    }
-		    else if (departures.containsKey(p) && round >= departures.get(p) && omegas.containsKey(p)){
+		    else if (departures.containsKey(p) && round >= departures.get(p) && isCurve.containsKey(p)){
+
+	    		double directBearing = calculateBearing(p.getLocation(), p.getDestination());
+	    		
+	    		double angle = differenceOfAngles(directBearing, p.getBearing());
 		    	
-		    	double bearing = ((originals.get(p) + (round-departures.get(p))*omegas.get(p))+360)%360;
-	    		bearings[i] = bearing;
-		    	double left = finalStepTable.get(p);
-		    	
-//		    	if (left < 5) {
-//		    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
-//		    	} else {
-//		    		
-//		    		double bearing = ((originals.get(p) + (round-departures.get(p))*omegas.get(p))+360)%360;
-//		    		bearings[i] = bearing;
-//		    		left = left - (double)1;
-//		    		finalStepTable.put(p, left);
-//		    	}	
-//		    	
-//		    	double bearing = (originals.get(p) + ((round-departures.get(p))*omegas.get(p))+360)%360;
-////		    	double bearing = (originals.get(p) + round*omegas.get(p))%360;
-//	    		bearings[i] = bearing;
+		    	if (angle > 90) {
+		    		
+		    		bearings[i] = minusDelta(p.getBearing(), statusTable.get(p) * 10);
+		    	} else {
+		    		
+		    		if (omegaTable.containsKey(p)) {
+		    			
+		    			double archBearing = omegaTable.get(p);
+				    	double currentBearing = bearings[i];
+				    	double nextBearing = minusDelta(currentBearing, statusTable.get(p) * archBearing);
+				    	
+				    	double diff = differenceOfAngles(directBearing, currentBearing);
+				    	
+				    	if (diff <= 8.5) {
+				    		
+				    		bearings[i] = directBearing;
+				    	} else {
+				    		
+				    		bearings[i] = nextBearing;
+				    	}
+		    		} else {
+		    			
+		    			getOmega(p, angle);
+			    		bearings[i] = minusDelta(p.getBearing(), statusTable.get(p) * omegaTable.get(p));
+		    		}
+		    	}
 		    }
 		}
 		
@@ -346,6 +347,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		// if no plane is in the air, find the one with the earliest 
 		// departure time and move that one in the right direction
 		if(departures.size() == 0){
+//			System.err.println("x");
 			for (int i = 0; i < planes.size(); i++) {
 				if(bearings[i] == -2)
 		    		continue;
@@ -357,49 +359,75 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		}
 		// all the logic
 		else{
+//			System.err.println("rtttttttttt " + departures.size());
 			for (int i = 0; i < planes.size(); i++) {
 				if(bearings[i] == -2)
 		    		continue;
 				Plane p = planes.get(i);
 				Plane global = global_planes.get(i);
 			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1) { // check to see if we can legally fly
-			    	if(!omegas.containsKey(global))
-			    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
-			    	else{
-			    		double bearing = originals.get(global);
-			    		bearings[i] = bearing;
-			    		int t = (departures.get(global) - global.getDepartureTime());
+			    	
+			    	if(!isCurve.containsKey(global)) {
 			    		
-//			    		double left = stepTable.get(global);
-//			    		left = left - (double)1;
-//			    		stepTable.put(global, left);
-			    		//System.err.println("Omega Delay is " + bearings[i]);
+			    		bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+			    	} else {
+			    		
+			    		double directBearing = calculateBearing(p.getLocation(), p.getDestination());
+			 		    double iniBearing = originals.get(global);
+			    		double angle = differenceOfAngles(directBearing, iniBearing);
+			    		if (angle > 90) {
+				    		
+				    		bearings[i] = minusDelta(iniBearing, statusTable.get(global) * 10);
+				    	} else {
+				    		
+				    		getOmega(global, angle);
+				    		bearings[i] = minusDelta(iniBearing, statusTable.get(global) * omegaTable.get(global));
+				    	}
 			    	}
 			    }
-			    else if (departures.containsKey(global) && round >= departures.get(global) && omegas.containsKey(global)){ // when planes are in flight
+			    else if (departures.containsKey(global) && round >= departures.get(global) && isCurve.containsKey(global)){ // when planes are in flight
 			    	
-			    	double bearing = ((originals.get(global) + (round-departures.get(global))*omegas.get(global))+360)%360;
-		    		bearings[i] = bearing;
-			    	double left = stepTable.get(global);
+			    	double directBearing = calculateBearing(p.getLocation(), p.getDestination());
+			    	double angle = differenceOfAngles(directBearing, p.getBearing());
 			    	
-//			    	if (left < 5) {
-//			    		bearings[i] = calculateBearing(global.getLocation(), global.getDestination());
-//			    	} else {
-//			    		
-//			    		double bearing = ((originals.get(global) + (round-departures.get(global))*omegas.get(global))+360)%360;
-//			    		bearings[i] = bearing;
-//			    		left = left - (double)1;
-//			    		stepTable.put(global, left);
-//			    	}	
+			    	if (angle > 90) {
+			    		
+			    		bearings[i] = minusDelta(p.getBearing(), statusTable.get(p) * 10);
+			    	} else {
+
+			    		if (omegaTable.containsKey(global)) {
+			    			
+			    			double archBearing = omegaTable.get(global);
+					    	double currentBearing = bearings[i];
+					    	double nextBearing = minusDelta(currentBearing, statusTable.get(global) * archBearing);
+					    	
+					    	double diff = differenceOfAngles(directBearing, currentBearing);
+					    	
+					    	if (diff <= 8.5) {
+					    		
+					    		bearings[i] = directBearing;
+					    	} else {
+					    		
+					    		bearings[i] = nextBearing;
+					    	}
+			    		} else {
+			    			
+			    			getOmega(global, angle);
+				    		bearings[i] = minusDelta(p.getBearing(), statusTable.get(global) * omegaTable.get(global));
+			    		}
+			    	}
 			    }
 			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global)){
 			    	bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 			    }
 			}
+			
 			for (int i = 0; i < planes.size(); i++) {
+//				System.err.println("y");
 				Plane other = planes.get(i);
 				Plane global = global_planes.get(i);
 				if(!departures.containsKey(global) && round >= other.getDepartureTime() && other.getBearing() == -1){
+//					System.err.println("z " + departures.size());
 			    	boolean flying = false;
 			    	for (int j = 0; j < planes.size(); j++) {
 			    		if(bearings[j] >= 0){
