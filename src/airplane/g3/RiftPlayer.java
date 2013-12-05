@@ -80,9 +80,20 @@ public class RiftPlayer extends airplane.sim.Player {
 				arrivals_to_planes.put(arrivalTime, vals);
 			}
 			//create a sorted descending order of arrival times
-			Float[] arrivalTimes = (Float[])arrivals_to_planes.keySet().toArray();
+//			Object[] ar = arrivals_to_planes.entrySet().toArray();
+//			for(Object key:ar){
+//				Object a = key;
+//				float k = (HashMap)key.keyset();
+//			}
+			Float[] arrivalTimes = new Float[arrivals_to_planes.keySet().size()];
+			int i=0;
+			for(float k:arrivals_to_planes.keySet()){
+				arrivalTimes[i] = k;
+				i++;
+			}
 			Arrays.sort(arrivalTimes, Collections.reverseOrder());
-			for(float time : arrivalTimes){
+			for(double t : arrivalTimes){
+				float time = (float)t;
 				ArrayList<Plane> tierPlanes = arrivals_to_planes.get(time);
 				//go through the planes at this arrival time (should normally be one but we do this for loop to resolve conflicts) and add the departure sequence to the unfinished_dependency_departures to loop through.
 				while(tierPlanes.size()>0){
@@ -93,9 +104,11 @@ public class RiftPlayer extends airplane.sim.Player {
 						dependencyMap.put(p, allDependents);
 						allDependents.add(p);
 						for(Plane d:allDependents){
-							if(d.getDepartureTime()<minTime){
-								minTime = d.getDepartureTime();
-								earliestPlane = p;
+							if(d != null){
+								if(d.getDepartureTime()<minTime){
+									minTime = d.getDepartureTime();
+									earliestPlane = p;
+								}
 							}
 						}
 					}
@@ -193,40 +206,49 @@ public class RiftPlayer extends airplane.sim.Player {
 	
 	private ArrayList<Plane> getAllChildren(Plane p){
 		ArrayList<Plane> children = new ArrayList<Plane>();
-		ArrayList<Integer> childrenIds = p.getDependencies();
-		for(int id:childrenIds){
-			ArrayList<Plane> dependencies = getAllChildren(id_lookup.get(id));
-			children.addAll(dependencies);
-			children.add(id_lookup.get(id));
+		if(p != null){
+			ArrayList<Integer> childrenIds = p.getDependencies();
+			if(p.getDependencies() != null){
+				for(int id:childrenIds){
+					if(id != p.id){
+						ArrayList<Plane> dependencies = getAllChildren(id_lookup.get(id));
+						children.addAll(dependencies);
+						children.add(id_lookup.get(id));
+					}
+				}
+			}
 		}
 		return children;
 	}
 	
 	private float getArrivalTime(Plane p){
-		if(p.getDependencies() == null || p.getDependencies().size()==0)
-			return (float)p.getDepartureTime()+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
-		else{
-			ArrayList<Plane> children = new ArrayList<Plane>();
-			if(p.getDependencies()!=null){
-				for(Integer id : p.getDependencies()){
-					Plane c = id_lookup.get(id);
-					if(!children.contains(c))
-						children.add(id_lookup.get(id));
+		if(p != null){
+			if(p.getDependencies() == null || p.getDependencies().size()==0)
+				return (float)p.getDepartureTime()+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
+			else{
+				ArrayList<Plane> children = new ArrayList<Plane>();
+				if(p.getDependencies()!=null){
+					for(Integer id : p.getDependencies()){
+						Plane c = id_lookup.get(id);
+						if(!children.contains(c) && id != p.id)
+							children.add(id_lookup.get(id));
+					}
 				}
-			}
-			ArrayList<Float> times = new ArrayList<Float>();
-			for(Plane child: children){
-				float arrive = getArrivalTime(child);
-				times.add(arrive);
-			}
-			float maxChildArrive = (float)0.0;
-			for(Float time : times){
-				if(time > maxChildArrive){
-					maxChildArrive = time;
+				ArrayList<Float> times = new ArrayList<Float>();
+				for(Plane child: children){
+					float arrive = getArrivalTime(child);
+					times.add(arrive);
 				}
+				float maxChildArrive = (float)0.0;
+				for(Float time : times){
+					if(time > maxChildArrive){
+						maxChildArrive = time;
+					}
+				}
+				return (float)Math.max((float)p.getDepartureTime(), Math.floor(maxChildArrive)+1)+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
 			}
-			return (float)Math.max((float)p.getDepartureTime(), Math.floor(maxChildArrive)+1)+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
 		}
+		return 0;
 	}
 	
 	private boolean headOnCollision(ArrayList<Plane> planes, Plane p){
