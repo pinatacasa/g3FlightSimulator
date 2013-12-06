@@ -93,21 +93,17 @@ public abstract class Player {
     	
     	// now loop through the simulation
     	while(landed != simBearings.length && continueSimulation) {
-    		
     		// update the round number
     		round++;
-    		
-//    		if(round > 1500) {
-//    			return new SimulationResult(SimulationResult.NORMAL, round, simPlanes);
-//    		}
     		// the player simulates the update of the planes
     		simBearings = simulateUpdate(simPlanes, round, simBearings);
     		// if it's null, then don't bother
     		if (simBearings == null) return new SimulationResult(SimulationResult.NULL_BEARINGS, round, simPlanes);
     		// make sure no planes took off too early
 			for (int i = 0; i < simPlanes.size(); i++) {
-				if (simPlanes.get(i).getDepartureTime() > round && simBearings[i] > -1) {
-					return new SimulationResult(SimulationResult.TOO_EARLY, round, simPlanes);
+				if (simBearings[i] > -1) {
+					if (simPlanes.get(i).getDepartureTime() > round || simPlanes.get(i).dependenciesHaveLanded(simBearings) == false)
+						return new SimulationResult(SimulationResult.TOO_EARLY, round, simPlanes);
 				}
 			}
     		// update the locations
