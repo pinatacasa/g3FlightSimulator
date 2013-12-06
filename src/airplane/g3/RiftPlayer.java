@@ -53,9 +53,12 @@ public class RiftPlayer extends airplane.sim.Player {
 		global_planes = planes;
 		all_can_fly_straight = false;
 		logger.info("Starting new game!");
+		int id_new=0;
 		for (Plane p : planes){
 			originals.put(p, calculateBearing(p.getLocation(),p.getDestination()));
+			p.id = id_new;
 			id_lookup.put(p.id, p);
+			id_new++;
 		}
 		// At the start, first see if all the planes can make their destinations in a straight line. If so, set the boolean flag so we don't mess with them in the update method :)
 		SimulationResult res = startSimulation(planes, 0);
