@@ -1,6 +1,8 @@
 package airplane.g3;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -54,9 +56,15 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		global_planes = planes;
 		all_can_fly_straight = false;
 		logger.info("Starting new game!");
+		
+		int id_new = 0;
 		for (Plane p : planes){
 			originals.put(p, calculateBearing(p.getLocation(),p.getDestination()));
+			p.id = id_new;
+			id_lookup.put(p.id, p);
+			id_new++;
 		}
+		
 		// At the start, first see if all the planes can make their destinations in a straight line. If so, set the boolean flag so we don't mess with them in the update method :)
 		SimulationResult res = startSimulation(planes, 0);
 		if (res.getReason() == 0){
@@ -67,11 +75,112 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			Comparator<Plane> comparator = new PlaneDepartureComparator();
 			unfinished_departures = new PriorityQueue<Plane>(planes.size(), comparator);
 			unfinished_departures.addAll(planes);
-			while (unfinished_departures.size() > 0){
+			ArrayList<Plane> dependency_unfinished_departures = new ArrayList<Plane>();
+			
+			for (Plane p : planes){
+				ArrayList<Plane> vals = new ArrayList<Plane>();
+				float arrivalTime = getArrivalTime(p);
+				planes_to_arrivals.put(p, arrivalTime);
+				if(arrivals_to_planes.containsKey(arrivalTime)){
+					vals = arrivals_to_planes.get(arrivalTime);
+				}
+				vals.add(p);
+				arrivals_to_planes.put(arrivalTime, vals);
+			}
+			//create a sorted descending order of arrival times
+			Float[] arrivalTimes = new Float[arrivals_to_planes.keySet().size()];
+			int i=0;
+			for(float k:arrivals_to_planes.keySet()){
+				arrivalTimes[i] = k;
+				i++;
+			}
+			Arrays.sort(arrivalTimes, Collections.reverseOrder());
+			//wow wasn't that stupid that we had to do that since keyset() on its own was returning null?
+			
+			for(double t : arrivalTimes){
+				float time = (float)t;
+				ArrayList<Plane> tierPlanes = arrivals_to_planes.get(time);
+				//go through the planes at this arrival time (should normally be one but we do this for loop to resolve conflicts) and add the departure sequence to the unfinished_dependency_departures to loop through.
+				while(tierPlanes.size()>0){
+					Plane earliestPlane = null;
+					double minTime = Double.MAX_VALUE;
+					//in this list of planes with the same arrival time, find the one with the dependency with the earliest departure. (most of the time there is only one plane in the list anyway).
+					for(Plane p: tierPlanes){
+						ArrayList<Plane> allDependents = getAllChildren(p);
+						dependencyMap.put(p, allDependents);
+						allDependents.add(p);
+						for(Plane d:allDependents){
+							if(d != null){
+								if(d.getDepartureTime()<minTime){
+									minTime = d.getDepartureTime();
+									earliestPlane = p;
+								}
+							}
+						}
+					}
+					//now that we have the group of planes with the earliest departure time, add them in order of lowest departure time
+					//to the final list
+					ArrayList<Plane> children = dependencyMap.get(earliestPlane);
+					children.add(earliestPlane);
+					System.err.println(String.format("Considering plane: %s",earliestPlane.toString()));
+					while(children.size()>0){
+						//find a leaf
+						Plane add = null;
+						for(Plane p:children){
+							//leaf if no dependents
+							if(p.getDependencies() == null && !dependency_unfinished_departures.contains(p)){
+								add = p;
+								break;
+							}
+							//also leaf if all dependents have been added already
+							if(p.getDependencies() != null && !dependency_unfinished_departures.contains(p)){
+								boolean all_dependencies_in_list = true;
+								for(Plane d:getAllChildren(p)){
+									//if a dependent of this plane hasn't been added, don't add it
+									if(!dependency_unfinished_departures.contains(d)){
+										all_dependencies_in_list = false;
+										break;
+									}
+								}
+								if(all_dependencies_in_list){
+									add = p;
+									break;
+								}
+							}
+						}
+						//if no leaf was found and there are still children, prune it.
+						if(add ==null){
+							ArrayList<Plane> removeList = new ArrayList<Plane>();
+							for(Plane p:children){
+								if(dependency_unfinished_departures.contains(p)){
+									removeList.add(p);
+								}
+							}
+							for(Plane p:removeList){
+								children.remove(p);
+							}
+							continue;
+						}
+						//add the found leaf
+						dependency_unfinished_departures.add(add);
+						//remove the found leaf from the consideration set
+						children.remove(add);
+					}
+					
+					//remove the considered plane (root node) from the tierplanes to find the next one
+					tierPlanes.remove(earliestPlane);
+					
+				}
+			}
+			
+			//while we have some unfinished business to attend to...
+			while (dependency_unfinished_departures.size() > 0){
 
-				Plane p = unfinished_departures.remove();
+				Plane p = dependency_unfinished_departures.remove(0);
 				int time = p.getDepartureTime();
 				departures.put(p, time);
+//				boolean headOnCollision = headOnCollision(planes, p);
+				
 				int mode = 1;
 				
 				boolean isFirst = true;
@@ -154,6 +263,68 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				
 			}
 		}
+	}
+	
+
+//	private boolean headOnCollision(ArrayList<Plane> planes, Plane p) {
+//		boolean collision = false;
+//		for (Plane test : planes) {
+//			if (test.getDestination().equals(p.getLocation())
+//					&& test.getLocation().equals(p.getDestination())
+//					&& !isCurve.containsKey(test)) {
+//				collision = true;
+//				collisions.put(p, test);
+//				break;
+//			}
+//		}
+//		return collision;
+//	}
+
+	private ArrayList<Plane> getAllChildren(Plane p){
+		ArrayList<Plane> children = new ArrayList<Plane>();
+		if(p != null){
+			ArrayList<Integer> childrenIds = p.getDependencies();
+			if(p.getDependencies() != null){
+				for(int id:childrenIds){
+					if(id != p.id){
+						ArrayList<Plane> dependencies = getAllChildren(id_lookup.get(id));
+						children.addAll(dependencies);
+						children.add(id_lookup.get(id));
+					}
+				}
+			}
+		}
+		return children;
+	}
+	
+	private float getArrivalTime(Plane p){
+		if(p != null){
+			if(p.getDependencies() == null || p.getDependencies().size()==0)
+				return (float)p.getDepartureTime()+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
+			else{
+				ArrayList<Plane> children = new ArrayList<Plane>();
+				if(p.getDependencies()!=null){
+					for(Integer id : p.getDependencies()){
+						Plane c = id_lookup.get(id);
+						if(!children.contains(c) && id != p.id)
+							children.add(id_lookup.get(id));
+					}
+				}
+				ArrayList<Float> times = new ArrayList<Float>();
+				for(Plane child: children){
+					float arrive = getArrivalTime(child);
+					times.add(arrive);
+				}
+				float maxChildArrive = (float)0.0;
+				for(Float time : times){
+					if(time > maxChildArrive){
+						maxChildArrive = time;
+					}
+				}
+				return (float)Math.max((float)p.getDepartureTime(), Math.floor(maxChildArrive)+1)+(float)(Math.sqrt(Math.pow((p.getX()-p.getDestination().x),2) + Math.pow((p.getY()-p.getDestination().y),2))/p.getVelocity());
+			}
+		}
+		return 0;
 	}
 	
 	private double formatAngle(double angle) {
@@ -270,7 +441,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	    		continue;
 			Plane p = planes.get(i);
 			
-		    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1) {
+		    if (departures.containsKey(p) && round >= departures.get(p) && p.getBearing() == -1 && p.dependenciesHaveLanded(bearings)) {
 		    	
 		    	if(!isCurve.containsKey(p)) {
 		    		
@@ -292,7 +463,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			    	}
 		    	}
 		    }
-		    else if (departures.containsKey(p) && round >= departures.get(p) && isCurve.containsKey(p)){
+		    else if (departures.containsKey(p) && round >= departures.get(p) && isCurve.containsKey(p) && p.dependenciesHaveLanded(bearings)){
 
 	    		double directBearing = calculateBearing(p.getLocation(), p.getDestination());
 	    		
@@ -353,7 +524,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		    		continue;
 				Plane p = planes.get(i);
 				Plane global = global_planes.get(i);
-			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1) { // check to see if we can legally fly
+			    if (departures.containsKey(global) && round >= departures.get(global) && p.getBearing() == -1 && global.dependenciesHaveLanded(bearings)) { // check to see if we can legally fly
 			    	
 			    	if(!isCurve.containsKey(global)) {
 			    		
@@ -373,7 +544,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				    	}
 			    	}
 			    }
-			    else if (departures.containsKey(global) && round >= departures.get(global) && isCurve.containsKey(global)){ // when planes are in flight
+			    else if (departures.containsKey(global) && round >= departures.get(global) && isCurve.containsKey(global) && global.dependenciesHaveLanded(bearings)){ // when planes are in flight
 			    	
 			    	double directBearing = calculateBearing(p.getLocation(), p.getDestination());
 			    	double angle = differenceOfAngles(directBearing, p.getBearing());
@@ -405,7 +576,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			    		}
 			    	}
 			    }
-			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global)){
+			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global) && global.dependenciesHaveLanded(bearings)){
 			    	bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
 			    }
 			}
