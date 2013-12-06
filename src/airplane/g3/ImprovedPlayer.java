@@ -43,6 +43,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	 * Each Plane object includes its current location (origin), destination, and
 	 * current bearing, which is -1 to indicate that it's on the ground.
 	 */
+	int f = 0;
 	@Override
 	public void startNewGame(ArrayList<Plane> planes) {
 		
@@ -75,7 +76,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				int omegaTime = 0;
 				
 				int maxDelayTime = 5;
-				int maxOmegaTime = 16;
+				int maxOmegaTime = 25;
 				
 				double bearing = calculateBearing(p.getLocation(),p.getDestination());
 
@@ -300,6 +301,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			    	} else {
 			    		
 			    		getOmega(p, angle);
+			    		logger.info("The Angle is " + angle);
 			    		bearings[i] = minusDelta(iniBearing, statusTable.get(p) * omegaTable.get(p));
 			    	}
 		    	}
