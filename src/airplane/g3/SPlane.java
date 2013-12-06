@@ -33,10 +33,10 @@ public class SPlane extends Plane {
 		return allPoints;
 	}
 	
-	public SPlane(double x, double y, double dx, double dy, int departureTime) {
-		super(x, y, dx, dy, departureTime);
-		locks = new ArrayList<Semaphore>();
-	}
+//	public SPlane(double x, double y, double dx, double dy, int departureTime) {
+////		super(x, y, dx, dy, departureTime);
+//		locks = new ArrayList<Semaphore>();
+//	}
 	
 	public SPlane(SPlane other) {
 		super(other);

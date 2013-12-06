@@ -9,7 +9,6 @@ import java.util.PriorityQueue;
 
 import org.apache.log4j.Logger;
 
-import airplane.g3.RiftPlayer.PlaneDepartureComparator;
 import airplane.sim.Plane;
 import airplane.sim.SimulationResult;
 
@@ -27,10 +26,15 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	private Hashtable<Plane, Double> omegaTable = new Hashtable<Plane, Double>();
 	private Hashtable<Plane, Integer> isCurve = new Hashtable<Plane, Integer>();
 	private Hashtable<Plane, Integer> statusTable = new Hashtable<Plane, Integer>();
-
+	
+	private Map<Integer,Plane> id_lookup = new HashMap<Integer,Plane>();	
+	private Map<Float,ArrayList<Plane>> arrivals_to_planes = new HashMap<Float,ArrayList<Plane>>();
+	private Map<Plane,Float> planes_to_arrivals = new HashMap<Plane,Float>();	
+	private Map<Plane,ArrayList<Plane>> dependencyMap = new HashMap<Plane,ArrayList<Plane>>();
+	
 	private double increment_theta = 5;
-	private int max_delay = 10;
-	private double max_theta = 30;
+	private int maxDelayTime = 5;
+	private int maxOmegaTime = 25;
 	
 	@Override
 	public String getName() {
@@ -75,9 +79,6 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				int delayTime = 0;
 				int omegaTime = 0;
 				
-				int maxDelayTime = 5;
-				int maxOmegaTime = 25;
-				
 				double bearing = calculateBearing(p.getLocation(),p.getDestination());
 
 				//start checks
@@ -87,26 +88,13 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				boolean pos = true;
 	
 				do {
-					
-//					if (time >= 15) {
-//						
-//						mode = 1;
-//						omegaTime = 0;
-//						posbearing = bearing;
-//						negbearing = bearing;
-//						maxOmegaTime = 34;
-//						departures.put(p, p.getDepartureTime());
-//					}
-					
+
 					if (delayTime > maxDelayTime && mode == 0) {
 						
 						mode = 1;
 						omegaTime = 0;
 						posbearing = bearing;
 						negbearing = bearing;
-						
-//						int newTime = time - 2;
-//						departures.put(p, newTime);
 					}
 					
 					if (omegaTime > maxOmegaTime && mode == 1) {
@@ -122,7 +110,6 @@ public class ImprovedPlayer extends airplane.sim.Player {
 							
 							isCurve.remove(p);
 						}
-//						departures.put(p, time);
 					}
 					
 					if (mode == 0) {
@@ -142,7 +129,6 @@ public class ImprovedPlayer extends airplane.sim.Player {
 						
 						omegaTime ++;
 						
-//						System.err.println("1 " + omegaTime);
 						if(pos){
 							
 							posbearing = plusDelta(posbearing, increment_theta); 
@@ -349,7 +335,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		// if no plane is in the air, find the one with the earliest 
 		// departure time and move that one in the right direction
 		if(departures.size() == 0){
-//			System.err.println("x");
+
 			for (int i = 0; i < planes.size(); i++) {
 				if(bearings[i] == -2)
 		    		continue;
@@ -361,7 +347,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		}
 		// all the logic
 		else{
-//			System.err.println("rtttttttttt " + departures.size());
+
 			for (int i = 0; i < planes.size(); i++) {
 				if(bearings[i] == -2)
 		    		continue;
@@ -425,11 +411,11 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			}
 			
 			for (int i = 0; i < planes.size(); i++) {
-//				System.err.println("y");
+
 				Plane other = planes.get(i);
 				Plane global = global_planes.get(i);
 				if(!departures.containsKey(global) && round >= other.getDepartureTime() && other.getBearing() == -1){
-//					System.err.println("z " + departures.size());
+
 			    	boolean flying = false;
 			    	for (int j = 0; j < planes.size(); j++) {
 			    		if(bearings[j] >= 0){
