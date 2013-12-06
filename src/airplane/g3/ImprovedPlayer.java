@@ -23,6 +23,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
 	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
 	private ArrayList<Plane> global_planes = new ArrayList<Plane>();
+	private ArrayList<Plane> ordered_planes = new ArrayList<Plane>();
 	private Map<Plane,Double> originals = new HashMap<Plane,Double>(); // initial bearing from start location.
 	private Map<Plane,Plane> collisions = new HashMap<Plane,Plane>(); // literally overlapping lines
 	private Hashtable<Plane, Double> omegaTable = new Hashtable<Plane, Double>();
@@ -55,7 +56,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		
 		global_planes = planes;
 		all_can_fly_straight = false;
-		logger.info("Starting new game!");
+//		logger.info("Starting new game!");
 		
 		int id_new = 0;
 		for (Plane p : planes){
@@ -122,7 +123,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 					//to the final list
 					ArrayList<Plane> children = dependencyMap.get(earliestPlane);
 					children.add(earliestPlane);
-					System.err.println(String.format("Considering plane: %s",earliestPlane.toString()));
+//					System.err.println(String.format("Considering plane: %s",earliestPlane.toString()));
 					while(children.size()>0){
 						//find a leaf
 						Plane add = null;
@@ -171,6 +172,10 @@ public class ImprovedPlayer extends airplane.sim.Player {
 					tierPlanes.remove(earliestPlane);
 					
 				}
+			}
+			
+			for(Plane p : dependency_unfinished_departures) {
+				System.err.println(p.id);
 			}
 			
 			//while we have some unfinished business to attend to...
@@ -257,28 +262,34 @@ public class ImprovedPlayer extends airplane.sim.Player {
 
 						res = startSimulation(planes, 0);
 					}
-					
-					System.err.println(res.getReason() + " " + mode);
-				} while(res.getReason() != 0);
-				
+//					if (res.getReason() == 0) {
+//						System.err.println("Finished plane: " + p.id + " at round " + res.getRound());
+//					}
+//					if(res.getReason() == 7) {
+//						System.err.println("Current plane is: " + p.id + " at round " + res.getRound());
+////						System.exit(0);
+//					}
+//					System.err.println(res.getReason() + " " + mode);
+				} while(res.getReason() != 0 && res.getReason() != 7);
+				System.err.println("Shortest feasible time is: " + arrivalTimes[0]);
 			}
 		}
 	}
 	
 
-//	private boolean headOnCollision(ArrayList<Plane> planes, Plane p) {
-//		boolean collision = false;
-//		for (Plane test : planes) {
-//			if (test.getDestination().equals(p.getLocation())
-//					&& test.getLocation().equals(p.getDestination())
-//					&& !isCurve.containsKey(test)) {
-//				collision = true;
-//				collisions.put(p, test);
-//				break;
-//			}
-//		}
-//		return collision;
-//	}
+	private boolean headOnCollision(ArrayList<Plane> planes, Plane p) {
+		boolean collision = false;
+		for (Plane test : planes) {
+			if (test.getDestination().equals(p.getLocation())
+					&& test.getLocation().equals(p.getDestination())
+					&& !isCurve.containsKey(test)) {
+				collision = true;
+				collisions.put(p, test);
+				break;
+			}
+		}
+		return collision;
+	}
 
 	private ArrayList<Plane> getAllChildren(Plane p){
 		ArrayList<Plane> children = new ArrayList<Plane>();
@@ -451,14 +462,14 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		    		double directBearing = calculateBearing(p.getLocation(), p.getDestination());
 		 		    double iniBearing = originals.get(p);
 		    		double angle = differenceOfAngles(directBearing, iniBearing);
-		    		logger.info("Diff: " + angle);
+//		    		logger.info("Diff: " + angle);
 		    		if (angle > 90) {
 			    		
 			    		bearings[i] = minusDelta(iniBearing, statusTable.get(p) * 10);
 			    	} else {
 			    		
 			    		getOmega(p, angle);
-			    		logger.info("The Angle is " + angle);
+//			    		logger.info("The Angle is " + angle);
 			    		bearings[i] = minusDelta(iniBearing, statusTable.get(p) * omegaTable.get(p));
 			    	}
 		    	}
@@ -576,16 +587,16 @@ public class ImprovedPlayer extends airplane.sim.Player {
 			    		}
 			    	}
 			    }
-			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global) && global.dependenciesHaveLanded(bearings)){
-			    	bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
-			    }
+//			    else if (!departures.containsKey(global) && round >= p.getDepartureTime() && collisions.values().contains(global) && global.dependenciesHaveLanded(bearings)){
+//			    	bearings[i] = calculateBearing(p.getLocation(), p.getDestination());
+//			    }
 			}
 			
 			for (int i = 0; i < planes.size(); i++) {
 
 				Plane other = planes.get(i);
 				Plane global = global_planes.get(i);
-				if(!departures.containsKey(global) && round >= other.getDepartureTime() && other.getBearing() == -1){
+				if(!departures.containsKey(global) && round >= other.getDepartureTime() && other.getBearing() == -1 && global.dependenciesHaveLanded(bearings)){
 
 			    	boolean flying = false;
 			    	for (int j = 0; j < planes.size(); j++) {
