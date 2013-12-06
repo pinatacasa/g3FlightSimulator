@@ -71,7 +71,7 @@ public class RiftPlayer extends airplane.sim.Player {
 			unfinished_departures.addAll(planes);
 			ArrayList<Plane> dependency_unfinished_departures = new ArrayList<Plane>();
 			//find the plane that would land the last - the deciding factor for the time it takes to complete the problem.
-			//create a map of landing time:array<plane> (if straight path) as well as lane: landing time
+			//create a map of landing time:array<plane> (if straight path) as well as plane: landing time
 			for (Plane p : planes){
 				ArrayList<Plane> vals = new ArrayList<Plane>();
 				float arrivalTime = getArrivalTime(p);
@@ -83,11 +83,6 @@ public class RiftPlayer extends airplane.sim.Player {
 				arrivals_to_planes.put(arrivalTime, vals);
 			}
 			//create a sorted descending order of arrival times
-//			Object[] ar = arrivals_to_planes.entrySet().toArray();
-//			for(Object key:ar){
-//				Object a = key;
-//				float k = (HashMap)key.keyset();
-//			}
 			Float[] arrivalTimes = new Float[arrivals_to_planes.keySet().size()];
 			int i=0;
 			for(float k:arrivals_to_planes.keySet()){
@@ -95,6 +90,8 @@ public class RiftPlayer extends airplane.sim.Player {
 				i++;
 			}
 			Arrays.sort(arrivalTimes, Collections.reverseOrder());
+			//wow wasn't that stupid that we had to do that since keyset() on its own was returning null?
+			
 			for(double t : arrivalTimes){
 				float time = (float)t;
 				ArrayList<Plane> tierPlanes = arrivals_to_planes.get(time);
@@ -102,6 +99,7 @@ public class RiftPlayer extends airplane.sim.Player {
 				while(tierPlanes.size()>0){
 					Plane earliestPlane = null;
 					double minTime = Double.MAX_VALUE;
+					//in this list of planes with the same arrival time, find the one with the dependency with the earliest departure. (most of the time there is only one plane in the list anyway).
 					for(Plane p: tierPlanes){
 						ArrayList<Plane> allDependents = getAllChildren(p);
 						dependencyMap.put(p, allDependents);
@@ -119,15 +117,54 @@ public class RiftPlayer extends airplane.sim.Player {
 					//to the final list
 					ArrayList<Plane> children = dependencyMap.get(earliestPlane);
 					children.add(earliestPlane);
-					PriorityQueue<Plane> c = new PriorityQueue<Plane>(children.size(), comparator);
-					c.addAll(children);
-					while(c.size()>0){
-						Plane p = c.remove();
-						if(!dependency_unfinished_departures.contains(p)){
-							dependency_unfinished_departures.add(p);
+					System.err.println(String.format("Considering plane: %s",earliestPlane.toString()));
+					while(children.size()>0){
+						//find a leaf
+						Plane add = null;
+						for(Plane p:children){
+							//leaf if no dependents
+							if(p.getDependencies() == null && !dependency_unfinished_departures.contains(p)){
+								add = p;
+								break;
+							}
+							//also leaf if all dependents have been added already
+							if(p.getDependencies() != null && !dependency_unfinished_departures.contains(p)){
+								boolean all_dependencies_in_list = true;
+								for(Plane d:getAllChildren(p)){
+									//if a dependent of this plane hasn't been added, don't add it
+									if(!dependency_unfinished_departures.contains(d)){
+										all_dependencies_in_list = false;
+										break;
+									}
+								}
+								if(all_dependencies_in_list){
+									add = p;
+									break;
+								}
+							}
 						}
+						//if no leaf was found and there are still children, prune it.
+						if(add ==null){
+							ArrayList<Plane> removeList = new ArrayList<Plane>();
+							for(Plane p:children){
+								if(dependency_unfinished_departures.contains(p)){
+									removeList.add(p);
+								}
+							}
+							for(Plane p:removeList){
+								children.remove(p);
+							}
+							continue;
+						}
+						//add the found leaf
+						dependency_unfinished_departures.add(add);
+						//remove the found leaf from the consideration set
+						children.remove(add);
 					}
+					
+					//remove the considered plane (root node) from the tierplanes to find the next one
 					tierPlanes.remove(earliestPlane);
+					
 				}
 			}
 			
