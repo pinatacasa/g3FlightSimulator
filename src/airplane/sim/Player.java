@@ -103,8 +103,8 @@ public abstract class Player {
 			for (int i = 0; i < simPlanes.size(); i++) {
 				if (simBearings[i] > -1) {
 					if (simPlanes.get(i).getDepartureTime() > round || simPlanes.get(i).dependenciesHaveLanded(simBearings) == false) {
-						System.err.println("Current plane that left too early is " + simPlanes.get(i).getX() + ", " 
-								+ simPlanes.get(i).getY() + " and has id of " + simPlanes.get(i).id + " at round " + round);
+//						System.err.println("Current plane that left too early is " + simPlanes.get(i).getX() + ", " 
+//								+ simPlanes.get(i).getY() + " and has id of " + simPlanes.get(i).id + " at round " + round);
 						return new SimulationResult(SimulationResult.TOO_EARLY, round, simPlanes);
 					}
 						

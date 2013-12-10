@@ -1,11 +1,13 @@
 package airplane.g3;
 
+import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 
@@ -23,12 +25,13 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	private PriorityQueue<Plane> unfinished_departures = new PriorityQueue<Plane>();
 	private Map<Plane,Integer> departures = new HashMap<Plane, Integer>();
 	private ArrayList<Plane> global_planes = new ArrayList<Plane>();
-	private ArrayList<Plane> ordered_planes = new ArrayList<Plane>();
 	private Map<Plane,Double> originals = new HashMap<Plane,Double>(); // initial bearing from start location.
-	private Map<Plane,Plane> collisions = new HashMap<Plane,Plane>(); // literally overlapping lines
 	private Hashtable<Plane, Double> omegaTable = new Hashtable<Plane, Double>();
 	private Hashtable<Plane, Integer> isCurve = new Hashtable<Plane, Integer>();
 	private Hashtable<Plane, Integer> statusTable = new Hashtable<Plane, Integer>();
+	private Hashtable<Line2D, ArrayList<Plane>> samePath = new Hashtable<Line2D, ArrayList<Plane>>();
+	private Hashtable<Plane, Integer> isReady = new Hashtable<Plane, Integer>();
+//	private Hashtable<Plane, Integer> departureTime = new Hashtable<Plane, Integer>();
 	
 	private Map<Integer,Plane> id_lookup = new HashMap<Integer,Plane>();	
 	private Map<Float,ArrayList<Plane>> arrivals_to_planes = new HashMap<Float,ArrayList<Plane>>();
@@ -44,15 +47,105 @@ public class ImprovedPlayer extends airplane.sim.Player {
 		return "The Improved Player";
 	}
 	
-	
+	private void setisReady(Plane p, int maxNum) {
+		
+		isReady.put(p, 1);
+		Line2D key = new Line2D.Double();
+		key = null;
+		boolean flag = false;
+		int count = 0;
+		for (Iterator it = samePath.keySet().iterator(); it.hasNext(); ) {
+			
+			key = (Line2D) it.next();
+			ArrayList<Plane> listP = samePath.get(key);
+			
+			for (Plane test : listP) {
+				
+				if (count > maxNum) {
+					return;
+				}
+				
+				if (flag == true) {
+						
+					isReady.put(test, 1);
+					count ++;
+				}
+				if (test.id == p.id) {
+					
+					flag = true;
+				}
+			}
+			
+			if (flag == true) {
+				
+				return;
+			}
+		}
+	}
+
+	private void setDepartureTime(Plane p, int maxNum) {
+		
+		int t = departures.get(p);
+		int time = t + 19;
+		
+		Line2D key = new Line2D.Double();
+		key = null;
+		boolean flag = false;
+		int count = 0;
+		for (Iterator it = samePath.keySet().iterator(); it.hasNext(); ) {
+			
+			key = (Line2D) it.next();
+			ArrayList<Plane> listP = samePath.get(key);
+			
+			for (Plane test : listP) {
+				
+				if (count > maxNum) {
+					return;
+				}
+				
+				if (flag == true) {
+						
+					int iniTime = test.getDepartureTime();
+					int dependentTime = time;
+					int max = iniTime > dependentTime ? iniTime : dependentTime;
+					time += 19;	
+					count ++;
+					departures.put(test, max);
+					double oriBearing = originals.get(p);
+					originals.put(test, oriBearing);
+					if (isCurve.containsKey(p)) {
+						
+						isCurve.put(test, 1);
+						int status = statusTable.get(p);
+						statusTable.put(test, status);		
+					} else if (isCurve.containsKey(test)){
+						
+						isCurve.remove(test);
+					}
+					
+				}
+				if (test.id == p.id) {
+					
+					flag = true;
+				}
+			}
+			
+			if (flag == true) {
+				
+				return;
+			}
+		}
+	}
 	/*
 	 * This is called at the beginning of a new simulation. 
 	 * Each Plane object includes its current location (origin), destination, and
 	 * current bearing, which is -1 to indicate that it's on the ground.
 	 */
 	int f = 0;
+	int maxN = 50;
 	@Override
 	public void startNewGame(ArrayList<Plane> planes) {
+		
 		
 		global_planes = planes;
 		all_can_fly_straight = false;
@@ -174,121 +267,237 @@ public class ImprovedPlayer extends airplane.sim.Player {
 				}
 			}
 			
+			
 			for(Plane p : dependency_unfinished_departures) {
-				System.err.println(p.id);
+				samePath(p);
 			}
 			
-			//while we have some unfinished business to attend to...
-			while (dependency_unfinished_departures.size() > 0){
+			if (samePath.size() == 2) {
+				
+				int xx = 0;
+				while (dependency_unfinished_departures.size() > 0){
 
-				Plane p = dependency_unfinished_departures.remove(0);
-				int time = p.getDepartureTime();
-				departures.put(p, time);
-//				boolean headOnCollision = headOnCollision(planes, p);
-				
-				int mode = 1;
-				
-				boolean isFirst = true;
-				
-				int delayTime = 0;
-				int omegaTime = 0;
-				
-				double bearing = calculateBearing(p.getLocation(),p.getDestination());
-
-				//start checks
-				double posbearing = bearing;
-				double negbearing = bearing;
-				// start positive
-				boolean pos = true;
-	
-				do {
-
-					if (delayTime > maxDelayTime && mode == 0) {
-						
-						mode = 1;
-						omegaTime = 0;
-						posbearing = bearing;
-						negbearing = bearing;
-					}
+					Plane p = dependency_unfinished_departures.remove(0);
 					
-					if (omegaTime > maxOmegaTime && mode == 1) {
+					if (isReady.containsKey(p) && isReady.get(p) == 1) {
 						
-						mode = 0;
-						delayTime = 0;
-						if (omegaTable.containsKey(p)) {
+						continue;
+					}
+					int time = p.getDepartureTime();
+					departures.put(p, time);
+					setDepartureTime(p, maxN);
+					
+					int mode = 1;
+					
+					boolean isFirst = true;
+					
+					int delayTime = 0;
+					int omegaTime = 0;
+					
+					double bearing = calculateBearing(p.getLocation(),p.getDestination());
+
+					//start checks
+					double posbearing = bearing;
+					double negbearing = bearing;
+					// start positive
+					boolean pos = true;
+		
+					do {
+
+						if (delayTime > maxDelayTime && mode == 0) {
 							
-							omegaTable.remove(p);
+							mode = 1;
+							omegaTime = 0;
+							posbearing = bearing;
+							negbearing = bearing;
 						}
 						
-						if (isCurve.containsKey(p)) {
+						if (omegaTime > maxOmegaTime && mode == 1) {
 							
-							isCurve.remove(p);
+							mode = 0;
+							delayTime = 0;
+							if (omegaTable.containsKey(p)) {
+								
+								omegaTable.remove(p);
+							}
+							
+							if (isCurve.containsKey(p)) {
+								
+								isCurve.remove(p);
+							}
+							
+							departures.put(p, time);
+							setDepartureTime(p, maxN);
 						}
-					}
-					
-					if (mode == 0) {
 						
-						delayTime ++;
-
-						if (!isFirst) {
+						if (mode == 0) {
 							
-							time ++;
+							delayTime ++;
+
+							if (!isFirst) {
+								
+								time ++;
+								departures.put(p, time);
+								setDepartureTime(p, maxN);
+							}
+							res = startSimulation(planes, 0);
+							isFirst = false;
+						}
+						
+						if (mode == 1) {
+							
+							omegaTime ++;
+							
+							if(pos){
+								
+								posbearing = plusDelta(posbearing, increment_theta); 
+								pos = !pos;
+								originals.put(p, posbearing);
+								isCurve.put(p, 1);
+								statusTable.put(p, 1);
+							}
+							else{
+								
+								negbearing = minusDelta(negbearing, increment_theta);
+								pos = !pos;
+								originals.put(p, negbearing);
+								isCurve.put(p, 1);
+								statusTable.put(p, -1);
+							}
+
+							res = startSimulation(planes, 0);
+						}
+
+					} while(res.getReason() != 0 && res.getReason() != 7);
+					
+//					setDepartureTime(p, maxN);
+					setisReady(p, maxN);
+					System.err.println(xx + "Shortest feasible time is: " + arrivalTimes[0]);
+					xx ++;
+				}
+			} else {
+				int xx = 0;
+				while (dependency_unfinished_departures.size() > 0){
+
+					Plane p = dependency_unfinished_departures.remove(0);
+					int time = p.getDepartureTime();
+					departures.put(p, time);
+					
+					int mode = 1;
+					
+					boolean isFirst = true;
+					
+					int delayTime = 0;
+					int omegaTime = 0;
+					
+					double bearing = calculateBearing(p.getLocation(),p.getDestination());
+
+					//start checks
+					double posbearing = bearing;
+					double negbearing = bearing;
+					// start positive
+					boolean pos = true;
+		
+					do {
+
+						if (delayTime > maxDelayTime && mode == 0) {
+							
+							mode = 1;
+							omegaTime = 0;
+							posbearing = bearing;
+							negbearing = bearing;
+						}
+						
+						if (omegaTime > maxOmegaTime && mode == 1) {
+							
+							mode = 0;
+							delayTime = 0;
+							if (omegaTable.containsKey(p)) {
+								
+								omegaTable.remove(p);
+							}
+							
+							if (isCurve.containsKey(p)) {
+								
+								isCurve.remove(p);
+							}
+							
 							departures.put(p, time);
 						}
-						res = startSimulation(planes, 0);
-						isFirst = false;
-					}
-					
-					if (mode == 1) {
 						
-						omegaTime ++;
-						
-						if(pos){
+						if (mode == 0) {
 							
-							posbearing = plusDelta(posbearing, increment_theta); 
-							pos = !pos;
-							originals.put(p, posbearing);
-							isCurve.put(p, 1);
-							statusTable.put(p, 1);
+							delayTime ++;
+
+							if (!isFirst) {
+								
+								time ++;
+								departures.put(p, time);
+							}
+							res = startSimulation(planes, 0);
+							isFirst = false;
 						}
-						else{
+						
+						if (mode == 1) {
 							
-							negbearing = minusDelta(negbearing, increment_theta);
-							pos = !pos;
-							originals.put(p, negbearing);
-							isCurve.put(p, 1);
-							statusTable.put(p, -1);
+							omegaTime ++;
+							
+							if(pos){
+								
+								posbearing = plusDelta(posbearing, increment_theta); 
+								pos = !pos;
+								originals.put(p, posbearing);
+								isCurve.put(p, 1);
+								statusTable.put(p, 1);
+							}
+							else{
+								
+								negbearing = minusDelta(negbearing, increment_theta);
+								pos = !pos;
+								originals.put(p, negbearing);
+								isCurve.put(p, 1);
+								statusTable.put(p, -1);
+							}
+
+							res = startSimulation(planes, 0);
 						}
 
-						res = startSimulation(planes, 0);
-					}
-//					if (res.getReason() == 0) {
-//						System.err.println("Finished plane: " + p.id + " at round " + res.getRound());
-//					}
-//					if(res.getReason() == 7) {
-//						System.err.println("Current plane is: " + p.id + " at round " + res.getRound());
-////						System.exit(0);
-//					}
-//					System.err.println(res.getReason() + " " + mode);
-				} while(res.getReason() != 0 && res.getReason() != 7);
-				System.err.println("Shortest feasible time is: " + arrivalTimes[0]);
+					} while(res.getReason() != 0 && res.getReason() != 7);
+					
+					System.err.println(xx + "Shortest feasible time is: " + arrivalTimes[0]);
+					xx ++;
+				}
 			}
+			
+			
+			//while we have some unfinished business to attend to...
+			
 		}
 	}
 	
-
-	private boolean headOnCollision(ArrayList<Plane> planes, Plane p) {
-		boolean collision = false;
-		for (Plane test : planes) {
-			if (test.getDestination().equals(p.getLocation())
-					&& test.getLocation().equals(p.getDestination())
-					&& !isCurve.containsKey(test)) {
-				collision = true;
-				collisions.put(p, test);
+	private void samePath(Plane p) {
+		
+		ArrayList<Plane> samePathPlanes = new ArrayList<Plane>();
+		Line2D line = new Line2D.Double(p.getLocation(), p.getDestination());
+		Line2D key = new Line2D.Double();
+		key = null;
+		
+		for (Iterator it = samePath.keySet().iterator(); it.hasNext(); ) {
+			
+			key = (Line2D) it.next();
+		    
+			if (key.getX1() == line.getX1() && key.getX2() == line.getX2()
+					&& key.getY1() == line.getY1()
+					&& key.getY2() == line.getY2()) {
+				
+				samePathPlanes = samePath.get(key);
+				samePath.remove(key);
 				break;
 			}
 		}
-		return collision;
+		
+		samePathPlanes.add(p);
+		samePath.put(line, samePathPlanes);
 	}
 
 	private ArrayList<Plane> getAllChildren(Plane p){
@@ -516,6 +725,8 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	protected double[] simulateUpdate(ArrayList<Plane> planes, int round, double[] bearings) {
 		// if no plane is in the air, find the one with the earliest 
 		// departure time and move that one in the right direction
+//		depatureTime.clear();
+		
 		if(departures.size() == 0){
 
 			for (int i = 0; i < planes.size(); i++) {

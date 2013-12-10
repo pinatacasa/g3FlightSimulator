@@ -177,7 +177,7 @@ public class RiftPlayer extends airplane.sim.Player {
 				boolean headOnCollision = headOnCollision(planes, p);
 				if(!headOnCollision){
 					res = startSimulation(planes, 0);
-					while(res.getReason() != 0){
+					while(res.getReason() != 0 && res.getReason() != 7){
 						System.err.println("2");
 						// if we time out, look for angles
 						if(time - p.getDepartureTime() >= max_delay) {
@@ -222,7 +222,7 @@ public class RiftPlayer extends airplane.sim.Player {
 						omegas.put(p, omega);
 						res = startSimulation(planes, 0);
 						System.err.println("resulted in result of: " + res.getReason());
-					}while(res.getReason() != 0 && posbearing < max_bearing && negbearing > min_bearing);
+					}while(res.getReason() != 0  && res.getReason() != 7 && posbearing < max_bearing && negbearing > min_bearing);
 					//if it dropped out b/c couldn't find an angle, make it delay like normal.
 					if(posbearing >= max_bearing || negbearing <= min_bearing){
 						System.err.println("Bearing is: " + bearing);
