@@ -142,7 +142,7 @@ public class ImprovedPlayer extends airplane.sim.Player {
 	 * current bearing, which is -1 to indicate that it's on the ground.
 	 */
 	int f = 0;
-	int maxN = 50;
+	int maxN = 100;
 	@Override
 	public void startNewGame(ArrayList<Plane> planes) {
 		
